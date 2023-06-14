@@ -1,5 +1,8 @@
 from flask import Flask, render_template
 from .models import DB, User, Tweet
+from sklearn.datasets import load_iris
+from sklearn.linear_model import LogisticRegression
+
 
 def create_app():
 
@@ -28,5 +31,13 @@ def create_app():
         DB.drop_all()
         DB.create_all()
         return "database has been reset"
+    
+    @app.route('/iris')
+    def iris():
+        X, y = load_iris(return_X_y=True)
+        clf = LogisticRegression(random_state=0, solver='lbfgs',
+                          multi_class='multinomial').fit(X, y)
+        
+        return str(clf.predict(X[:2, :]))
 
     return app
