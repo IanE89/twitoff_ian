@@ -1,8 +1,7 @@
-from flask import Flask, render_template
+from flask import Flask, render_template, request
 from .models import DB, User, Tweet
-from sklearn.datasets import load_iris
-from sklearn.linear_model import LogisticRegression
-
+from .twitter import add_or_update_user
+from .predict import predict_user
 
 def create_app():
 
@@ -19,25 +18,68 @@ def create_app():
 
     @app.route('/')
     def root():
-        return render_template('base.html', title='Home')
-
-    @app.route('/bananas')
-    def bananas():
-        return render_template('base.html', title='Bananas')
+        users = User.query.all()
+        return render_template('base.html', title='Home', users=users)
     
     @app.route('/reset')
     def reset():
         #Drop all database tables
         DB.drop_all()
         DB.create_all()
-        return "database has been reset"
+        return render_template('base.html', title='Reset Database')
     
-    @app.route('/iris')
-    def iris():
-        X, y = load_iris(return_X_y=True)
-        clf = LogisticRegression(random_state=0, solver='lbfgs',
-                          multi_class='multinomial').fit(X, y)
+    @app.route('/populate')
+    def populate():
+        add_or_update_user('austen')
+        add_or_update_user('nasa')
+        add_or_update_user('ryanallred')
+
+        return render_template('base.html', title='Populate Database')
+
+    @app.route('/update')
+    def update():
+        # get list of usernames of all users
+        users = User.query.all()
+        for username in (user.username for user in users):
+            add_or_update_user(username)
+
+        return render_template('base.html', title='Uses Updated')
+
+    @app.route('/user', methods=['POST'])
+    @app.route('/user/<username>', methods=['GET'])        
+    def user(username=Name, message=''):
+    
+        username = username or request.values('user_name')
+
+        try:
+            if request.method == 'POST':
+                add_or_update_user(username)
+                message = f'User "{username}" has been successfully added!'
+
+            tweets = User.query.filter(User.username==username).one().tweets
         
-        return str(clf.predict(X[:2, :]))
+        except Exception as c:
+            message = f'Error adding {username}: {e}'
+            tweets = []
+        
+        return render_template('user.html', title=username, tweets=tweets, message=message)
+
+    @app.route('/compare', methods=['POST'])
+    def compare():
+       
+        user0, user1 = sorted([request.values['user0'], request.values['user1']])
+        hypo_tweet_text = request.values['tweet_text']
+
+        if user0 == user1:
+            message = 'Cannot compare a user to themselves!'
+        else:
+            prediction = predict_user(user0, user1, hypo_tweet_text)
+
+            if prediction:
+                message = "'{hypo_tweet_text}' is more likely to be said by {user1} than by {user0}"
+            else:
+                message = "'{hypo_tweet_text}' is more likely to be said by {user0} than by {user1}"   
+    
+        return render_template('prediction.html', title='Prediction', message=message)
 
     return app
